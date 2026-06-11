@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from startup_ops_agent.config import default_data_dir, load_settings
@@ -25,6 +26,7 @@ class EvaluationReport:
     passed: int
     failed: int
     results: list[EvaluationResult]
+    metrics: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -32,6 +34,7 @@ class EvaluationReport:
             "passed": self.passed,
             "failed": self.failed,
             "results": [result.__dict__ for result in self.results],
+            "metrics": self.metrics,
         }
 
 
@@ -100,7 +103,15 @@ def _evaluate_energy_simulation(service: EnergyOptimizationService) -> Evaluatio
         for result in results
         if result.case_id == "heat-dome-peak-price-critical-occupancy"
     )
-    has_trace = [step.step for step in critical.trace] == ["retrieve_context", "resolve_conflict"]
+    expected_steps = [
+        "retrieve_context",
+        "detect_conflict",
+        "evaluate_priority",
+        "allocate_load_shed",
+        "governance_safety_check",
+        "compute_impact",
+    ]
+    has_trace = [step.step for step in critical.trace] == expected_steps
     if critical.plan.primary_priority.value != "safety" or not has_trace:
         return _result(
             "energy_extreme_weather_peak_pricing_simulation",
@@ -146,6 +157,116 @@ def _evaluate_energy_business_impact(service: EnergyOptimizationService) -> Eval
     )
 
 
+def _evaluate_safety_invariants(service: EnergyOptimizationService) -> EvaluationResult:
+    results = service.run_all_simulations()
+    offending = {
+        result.case_id: [violation.code for violation in result.plan.safety_violations]
+        for result in results
+        if result.plan.safety_violations
+    }
+    if offending:
+        return _result(
+            "energy_safety_invariants",
+            False,
+            f"Safety invariants violated in simulated plans: {offending}.",
+        )
+    return _result(
+        "energy_safety_invariants",
+        True,
+        f"All {len(results)} simulated plans satisfy safety invariants: no critical-zone "
+        "shedding, setpoints within safe bounds, shed within capacity.",
+    )
+
+
+def _compute_metrics(service: EnergyOptimizationService) -> dict[str, object]:
+    cases = service.repository.simulation_cases()
+    sim_results = service.run_all_simulations()
+    passed = sum(1 for result in sim_results if result.passed)
+    total = len(cases)
+
+    priority_distribution: dict[str, int] = {}
+    safety_violations_total = 0
+    source_id_preserved = 0
+    latencies_ms: list[float] = []
+    for case in cases:
+        start = time.perf_counter()
+        plan = service.build_optimization_plan(
+            building_id=case.building_id,
+            weather_event_id=case.weather_event_id,
+            pricing_event_id=case.pricing_event_id,
+            occupancy_id=case.occupancy_id,
+        )
+        latencies_ms.append((time.perf_counter() - start) * 1000.0)
+        priority_distribution[plan.primary_priority.value] = (
+            priority_distribution.get(plan.primary_priority.value, 0) + 1
+        )
+        safety_violations_total += len(plan.safety_violations)
+        expected_ids = {
+            case.building_id,
+            case.weather_event_id,
+            case.pricing_event_id,
+            case.occupancy_id,
+        }
+        if expected_ids.issubset(set(plan.source_ids)):
+            source_id_preserved += 1
+
+    return {
+        "simulation_total": total,
+        "simulation_passed": passed,
+        "simulation_pass_rate": round(passed / total, 4) if total else 0.0,
+        "safety_violations_total": safety_violations_total,
+        "priority_distribution": priority_distribution,
+        "avg_decision_latency_ms": round(sum(latencies_ms) / len(latencies_ms), 3)
+        if latencies_ms
+        else 0.0,
+        "source_id_preservation_rate": round(source_id_preserved / total, 4) if total else 0.0,
+    }
+
+
+def _evaluate_energy_portfolio(service: EnergyOptimizationService) -> EvaluationResult:
+    plan = service.build_portfolio_plan(
+        weather_event_id="weather-heat-dome",
+        pricing_event_id="pricing-grid-emergency",
+    )
+    if not plan.target_met:
+        return _result(
+            "energy_portfolio_demand_response",
+            False,
+            f"Portfolio left {plan.unmet_shed_kw} kW of the fleet target unmet.",
+        )
+    if not plan.protected_buildings:
+        return _result(
+            "energy_portfolio_demand_response",
+            False,
+            "Portfolio did not protect any safety-critical building during the grid emergency.",
+        )
+    protected = {c.building_id: c for c in plan.contributions if c.protected}
+    over_shed = [
+        building_id
+        for building_id, contribution in protected.items()
+        if contribution.allocated_shed_kw >= contribution.sheddable_capacity_kw
+        and contribution.sheddable_capacity_kw > 0
+    ]
+    if over_shed:
+        return _result(
+            "energy_portfolio_demand_response",
+            False,
+            f"Protected buildings were shed to capacity instead of last: {sorted(over_shed)}.",
+        )
+    if plan.total_cost_avoidance_usd <= 0 or plan.total_co2_avoided_kg <= 0:
+        return _result(
+            "energy_portfolio_demand_response",
+            False,
+            "Portfolio plan did not report fleet cost and CO2 avoidance.",
+        )
+    return _result(
+        "energy_portfolio_demand_response",
+        True,
+        "Portfolio meets the fleet demand-response target while protecting critical buildings "
+        "and reporting cost and CO2 avoidance.",
+    )
+
+
 def run_evaluations(data_dir: Path | None = None) -> EvaluationReport:
     source = data_dir or default_data_dir()
     with tempfile.TemporaryDirectory(prefix="startup-ops-eval-") as temp_dir:
@@ -157,13 +278,17 @@ def run_evaluations(data_dir: Path | None = None) -> EvaluationReport:
             _evaluate_track2_mandates(),
             _evaluate_energy_simulation(energy_service),
             _evaluate_energy_business_impact(energy_service),
+            _evaluate_energy_portfolio(energy_service),
+            _evaluate_safety_invariants(energy_service),
         ]
+        metrics = _compute_metrics(energy_service)
     passed = sum(1 for result in results if result.passed)
     return EvaluationReport(
         total=len(results),
         passed=passed,
         failed=len(results) - passed,
         results=results,
+        metrics=metrics,
     )
 
 

@@ -20,5 +20,38 @@
     "heat_risk_level": 4,
     "grid_risk": "high",
     "source": "synthetic-weather-extreme"
+  },
+  {
+    "event_id": "weather-heat-high",
+    "kind": "heat_wave",
+    "severity": "high",
+    "forecast_start": "2026-06-08T12:00:00Z",
+    "forecast_end": "2026-06-08T19:00:00Z",
+    "outdoor_temp_c": 38.0,
+    "heat_risk_level": 3,
+    "grid_risk": "medium",
+    "source": "synthetic-weather-heat-high"
+  },
+  {
+    "event_id": "weather-cold-snap",
+    "kind": "cold_snap",
+    "severity": "extreme",
+    "forecast_start": "2026-01-12T00:00:00Z",
+    "forecast_end": "2026-01-12T08:00:00Z",
+    "outdoor_temp_c": -18.0,
+    "heat_risk_level": 0,
+    "grid_risk": "high",
+    "source": "synthetic-weather-cold-snap"
+  },
+  {
+    "event_id": "weather-storm",
+    "kind": "storm",
+    "severity": "high",
+    "forecast_start": "2026-06-08T12:00:00Z",
+    "forecast_end": "2026-06-08T18:00:00Z",
+    "outdoor_temp_c": 24.0,
+    "heat_risk_level": 1,
+    "grid_risk": "high",
+    "source": "synthetic-weather-storm"
   }
 ]

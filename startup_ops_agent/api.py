@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from startup_ops_agent.config import load_settings
-from startup_ops_agent.energy_models import EnergyOptimizationPlan
+from startup_ops_agent.energy_models import EnergyOptimizationPlan, PortfolioOptimizationPlan
 from startup_ops_agent.energy_repository import EnergyJsonRepository
 from startup_ops_agent.energy_service import EnergyOptimizationService
 from startup_ops_agent.evaluation import run_evaluations
@@ -40,6 +40,13 @@ class EnergyPlanRequest(BaseModel):
     weather_event_id: str
     pricing_event_id: str
     occupancy_id: str
+
+
+class EnergyPortfolioRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    weather_event_id: str
+    pricing_event_id: str
 
 
 class EvaluationResponse(BaseModel):
@@ -95,6 +102,8 @@ def enterprise_manifest() -> dict[str, object]:
             "source ID preservation",
             "deterministic safety-first conflict resolution",
             "load-level demand-response decisions",
+            "portfolio-wide demand-response allocation that protects critical buildings",
+            "cost and CO2 avoidance accounting",
             "observability trace evaluation",
             "instruction optimization quality gate",
         ],
@@ -126,6 +135,19 @@ def energy_plan(request: EnergyPlanRequest) -> EnergyOptimizationPlan:
             weather_event_id=request.weather_event_id,
             pricing_event_id=request.pricing_event_id,
             occupancy_id=request.occupancy_id,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except DataAccessError as exc:
+        raise HTTPException(status_code=500, detail="Data access failed.") from exc
+
+
+@app.post("/v1/energy-portfolio", response_model=PortfolioOptimizationPlan)
+def energy_portfolio(request: EnergyPortfolioRequest) -> PortfolioOptimizationPlan:
+    try:
+        return _energy_service().build_portfolio_plan(
+            weather_event_id=request.weather_event_id,
+            pricing_event_id=request.pricing_event_id,
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -8,18 +8,34 @@
 - Flexible-load capacity comes from building data, not fixed prompt assumptions.
 - Non-critical loads are selected before critical-zone comfort is changed.
 - Cost avoidance and protected business risk are returned from deterministic fields.
-- Every simulation emits observability trace steps.
+- Every plan (not just simulations) emits a six-step observability trace.
+- Safety invariants hold on every plan: critical-zone loads are never shed,
+  setpoints stay within safe bounds, and shed never exceeds capacity.
 - Instruction optimizer detects and adds missing conflict-handling rules.
+
+## Quantitative Metrics
+
+`evaluate` reports a `metrics` block for baseline comparison:
+
+- `simulation_pass_rate` (target 1.0)
+- `safety_violations_total` (target 0)
+- `priority_distribution` across the 9-case suite
+- `avg_decision_latency_ms`
+- `source_id_preservation_rate` (target 1.0)
 
 ## Automated Tests
 
 The current test suite covers:
 
-- rare-event simulation
+- rare-event simulation (9 multivariable cases, all passing)
 - safety-versus-cost priority
-- observability trace shape
+- six-step observability trace shape
+- safety invariants (no critical-zone shed; setpoint bounds) and fail-fast
+  model validation
+- quantitative evaluation metrics block
 - load-level demand-response allocation
-- B2B cost and business-risk impact fields
+- portfolio (fleet) demand-response allocation
+- B2B cost, CO2, and business-risk impact fields
 - instruction optimizer behavior
 - legacy account-risk tests remain in the test suite as regression coverage, but
   the default readiness evaluation is Track 2 energy-focused

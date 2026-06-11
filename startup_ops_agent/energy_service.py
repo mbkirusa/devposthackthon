@@ -4,6 +4,7 @@ import hashlib
 import re
 
 from startup_ops_agent.energy_models import (
+    BuildingContribution,
     BuildingProfile,
     EnergyAction,
     EnergyOptimizationPlan,
@@ -11,13 +12,15 @@ from startup_ops_agent.energy_models import (
     FlexibleLoad,
     LoadShedDecision,
     OccupancyProfile,
+    PortfolioOptimizationPlan,
+    SafetyViolation,
     SimulationResult,
     TraceStep,
     UtilityPricingEvent,
     WeatherEvent,
 )
 from startup_ops_agent.energy_repository import EnergyJsonRepository
-from startup_ops_agent.service import NotFoundError
+from startup_ops_agent.service import NotFoundError, SafetyInvariantError
 
 
 def _stable_id(*parts: str) -> str:
@@ -75,6 +78,10 @@ class EnergyOptimizationService:
             setpoint = building.normal_setpoint_c
             decision = "Maintain normal operations and monitor grid and weather changes."
 
+        eligible_loads = self._eligible_flexible_loads(
+            building=building,
+            vulnerable_or_critical=vulnerable_or_critical,
+        )
         load_shed = self._load_shed_decisions(
             building=building,
             pricing=pricing,
@@ -88,6 +95,49 @@ class EnergyOptimizationService:
             pricing.pricing_event_id,
             occupancy.occupancy_id,
         ]
+        cost_avoidance = self._estimated_cost_avoidance(shed_kw, pricing)
+        co2_avoided = self._estimated_co2_avoided(shed_kw, pricing)
+        business_risk = self._business_risk_avoided(
+            building=building,
+            primary=primary,
+            vulnerable_or_critical=vulnerable_or_critical,
+        )
+
+        violations = self._check_safety_invariants(
+            building=building,
+            primary=primary,
+            setpoint=setpoint,
+            load_shed=load_shed,
+            source_ids=source_ids,
+        )
+        critical_breach = next(
+            (v for v in violations if v.code == "critical_zone_load_shed"), None
+        )
+        if critical_breach is not None:
+            raise SafetyInvariantError(critical_breach.detail)
+
+        trace = self._build_trace(
+            building=building,
+            weather=weather,
+            pricing=pricing,
+            occupancy=occupancy,
+            extreme_weather=extreme_weather,
+            peak_pricing=peak_pricing,
+            vulnerable_or_critical=vulnerable_or_critical,
+            conflicts=conflicts,
+            primary=primary,
+            decision=decision,
+            setpoint=setpoint,
+            load_shed=load_shed,
+            eligible_loads=eligible_loads,
+            shed_kw=shed_kw,
+            cost_avoidance=cost_avoidance,
+            co2_avoided=co2_avoided,
+            business_risk=business_risk,
+            violations=violations,
+            source_ids=source_ids,
+        )
+
         return EnergyOptimizationPlan(
             plan_id=f"energy-plan-{_stable_id(*source_ids)}",
             building_id=building.building_id,
@@ -96,16 +146,16 @@ class EnergyOptimizationService:
             setpoint_c=setpoint,
             expected_load_shed_kw=shed_kw,
             load_shed=load_shed,
-            estimated_cost_avoidance_usd=self._estimated_cost_avoidance(shed_kw, pricing),
-            estimated_business_risk_avoided_usd=self._business_risk_avoided(
-                building=building,
-                primary=primary,
-                vulnerable_or_critical=vulnerable_or_critical,
-            ),
+            estimated_cost_avoidance_usd=cost_avoidance,
+            estimated_co2_avoided_kg=co2_avoided,
+            estimated_business_risk_avoided_usd=business_risk,
             actions=self._actions(building, weather, pricing, primary, source_ids),
             conflicts=conflicts,
             compliance_notes=self._compliance_notes(building, weather, vulnerable_or_critical),
             real_world_basis=self._real_world_basis(weather, pricing),
+            trace=trace,
+            safety_invariants_passed=not violations,
+            safety_violations=violations,
             source_ids=source_ids,
         )
 
@@ -144,51 +194,391 @@ class EnergyOptimizationService:
 
     def run_simulation_case(self, case_id: str) -> SimulationResult:
         case = self._case(case_id)
-        trace = [
-            TraceStep(
-                step="retrieve_context",
-                decision="Loaded building, weather, pricing, and occupancy records.",
-                reason="Track 2 simulation requires multi-variable rare-event context.",
-                source_ids=[
-                    case.building_id,
-                    case.weather_event_id,
-                    case.pricing_event_id,
-                    case.occupancy_id,
-                ],
-            )
-        ]
         plan = self.build_optimization_plan(
             building_id=case.building_id,
             weather_event_id=case.weather_event_id,
             pricing_event_id=case.pricing_event_id,
             occupancy_id=case.occupancy_id,
         )
-        trace.append(
-            TraceStep(
-                step="resolve_conflict",
-                decision=plan.primary_priority.value,
-                reason=plan.decision,
-                source_ids=plan.source_ids,
+        failures: list[str] = []
+        if plan.primary_priority != case.expected_primary_priority:
+            failures.append(
+                f"priority {plan.primary_priority.value} != "
+                f"expected {case.expected_primary_priority.value}"
             )
-        )
-        passed = (
-            plan.primary_priority == case.expected_primary_priority
-            and bool(plan.conflicts) == case.expected_conflict
-        )
+        if bool(plan.conflicts) != case.expected_conflict:
+            failures.append(
+                f"conflict {bool(plan.conflicts)} != expected {case.expected_conflict}"
+            )
+        if case.expected_setpoint_c is not None and plan.setpoint_c != case.expected_setpoint_c:
+            failures.append(f"setpoint {plan.setpoint_c} != expected {case.expected_setpoint_c}")
+        if not plan.safety_invariants_passed:
+            failures.append(
+                f"safety invariants failed: {[v.code for v in plan.safety_violations]}"
+            )
         return SimulationResult(
             case_id=case.case_id,
-            passed=passed,
+            passed=not failures,
             plan=plan,
-            trace=trace,
-            failure_reason=None
-            if passed
-            else "Plan priority or conflict detection did not match expected simulation outcome.",
+            trace=plan.trace,
+            failure_reason=None if not failures else "; ".join(failures),
         )
 
     def run_all_simulations(self) -> list[SimulationResult]:
         return [
             self.run_simulation_case(case.case_id)
             for case in self.repository.simulation_cases()
+        ]
+
+    def build_portfolio_plan(
+        self,
+        *,
+        weather_event_id: str,
+        pricing_event_id: str,
+    ) -> PortfolioOptimizationPlan:
+        """Meet a grid-wide demand-response target across the whole building fleet.
+
+        Flexible load is shed from lower-business-risk buildings first, and
+        safety-critical buildings are protected (shed last and only from
+        non-critical loads).
+        """
+        weather = self._weather(weather_event_id)
+        pricing = self._pricing(pricing_event_id)
+        fleet_target = round(pricing.demand_response_requested_kw, 2)
+
+        buildings = self.repository.buildings()
+        if not buildings:
+            raise NotFoundError("No buildings available for portfolio optimization.")
+
+        # Evaluate each building against the same grid event to learn its priority,
+        # protection status, and how much non-critical load it can safely shed.
+        evaluated: list[tuple[BuildingProfile, EnergyOptimizationPlan, list[FlexibleLoad]]] = []
+        for building in buildings:
+            occupancy = self._most_critical_occupancy(building)
+            if occupancy is None:
+                continue
+            plan = self.build_optimization_plan(
+                building_id=building.building_id,
+                weather_event_id=weather.event_id,
+                pricing_event_id=pricing.pricing_event_id,
+                occupancy_id=occupancy.occupancy_id,
+            )
+            vulnerable_or_critical = plan.primary_priority == EnergyPriority.safety
+            eligible = self._eligible_flexible_loads(
+                building=building,
+                vulnerable_or_critical=vulnerable_or_critical,
+            )
+            evaluated.append((building, plan, eligible))
+
+        if not evaluated:
+            raise NotFoundError("No occupancy profiles found for any building in the portfolio.")
+
+        # Shed unprotected, lower-risk buildings first; protected buildings shed last.
+        order = sorted(
+            evaluated,
+            key=lambda item: (
+                item[1].primary_priority == EnergyPriority.safety,
+                item[0].business_value_at_risk_usd_per_hour,
+                item[0].building_id,
+            ),
+        )
+
+        remaining = fleet_target
+        contributions: list[BuildingContribution] = []
+        protected_buildings: list[str] = []
+        source_ids = [weather.event_id, pricing.pricing_event_id]
+        for building, plan, eligible in order:
+            protected = plan.primary_priority == EnergyPriority.safety
+            if protected:
+                protected_buildings.append(building.building_id)
+            capacity = round(sum(load.max_shed_kw for load in eligible), 2)
+            building_target = round(min(capacity, remaining), 2) if remaining > 0 else 0.0
+            decisions = self._allocate_load_shed(
+                eligible_loads=eligible,
+                target_kw=building_target,
+                primary=plan.primary_priority,
+            )
+            allocated = round(sum(decision.shed_kw for decision in decisions), 2)
+            remaining = round(remaining - allocated, 2)
+            contributions.append(
+                BuildingContribution(
+                    building_id=building.building_id,
+                    name=building.name,
+                    primary_priority=plan.primary_priority,
+                    sheddable_capacity_kw=capacity,
+                    allocated_shed_kw=allocated,
+                    load_shed=decisions,
+                    estimated_cost_avoidance_usd=self._estimated_cost_avoidance(allocated, pricing),
+                    estimated_co2_avoided_kg=self._estimated_co2_avoided(allocated, pricing),
+                    business_value_at_risk_usd_per_hour=building.business_value_at_risk_usd_per_hour,
+                    protected=protected,
+                    reason=(
+                        "Protected safety-critical building: only non-critical load shed, last in "
+                        "allocation order."
+                        if protected
+                        else "Lower-risk building selected earlier to meet the fleet target."
+                    ),
+                    source_ids=[building.building_id, weather.event_id, pricing.pricing_event_id],
+                )
+            )
+            source_ids.append(building.building_id)
+
+        total_shed = round(sum(c.allocated_shed_kw for c in contributions), 2)
+        unmet = round(max(fleet_target - total_shed, 0.0), 2)
+        allocation_notes = self._portfolio_allocation_notes(
+            fleet_target=fleet_target,
+            total_shed=total_shed,
+            unmet=unmet,
+            protected_buildings=protected_buildings,
+        )
+        trace = [
+            TraceStep(
+                step="retrieve_fleet_context",
+                decision=f"Evaluated {len(contributions)} buildings against the grid event.",
+                reason="Portfolio demand response requires every building's priority and capacity.",
+                source_ids=source_ids,
+            ),
+            TraceStep(
+                step="rank_and_allocate",
+                decision=f"Allocated {total_shed} kW of the {fleet_target} kW fleet target.",
+                reason=(
+                    "Lower-business-risk buildings are shed first; "
+                    "protected buildings shed last."
+                ),
+                source_ids=[c.building_id for c in contributions],
+            ),
+            TraceStep(
+                step="protect_critical_buildings",
+                decision="protected: " + (", ".join(protected_buildings) or "none"),
+                reason=(
+                    allocation_notes[-1]
+                    if unmet > 0
+                    else "Fleet target met within safe limits."
+                ),
+                source_ids=[weather.event_id, pricing.pricing_event_id],
+            ),
+        ]
+        return PortfolioOptimizationPlan(
+            portfolio_plan_id=f"portfolio-plan-{_stable_id(*source_ids)}",
+            weather_event_id=weather.event_id,
+            pricing_event_id=pricing.pricing_event_id,
+            fleet_demand_response_target_kw=fleet_target,
+            total_allocated_shed_kw=total_shed,
+            target_met=unmet <= 0,
+            unmet_shed_kw=unmet,
+            total_cost_avoidance_usd=round(
+                sum(c.estimated_cost_avoidance_usd for c in contributions), 2
+            ),
+            total_co2_avoided_kg=round(sum(c.estimated_co2_avoided_kg for c in contributions), 2),
+            total_business_risk_avoided_usd=round(
+                sum(plan.estimated_business_risk_avoided_usd for _, plan, _ in order), 2
+            ),
+            protected_buildings=protected_buildings,
+            contributions=contributions,
+            allocation_notes=allocation_notes,
+            trace=trace,
+            source_ids=source_ids,
+        )
+
+    def _most_critical_occupancy(self, building: BuildingProfile) -> OccupancyProfile | None:
+        profiles = [
+            occupancy
+            for occupancy in self.repository.occupancy_profiles()
+            if occupancy.building_id == building.building_id
+        ]
+        if not profiles:
+            return None
+        critical_zones = set(building.critical_zones)
+        return max(
+            profiles,
+            key=lambda item: (
+                item.vulnerable_occupants,
+                len(critical_zones.intersection(item.occupied_zones)),
+                item.business_hours,
+            ),
+        )
+
+    def _portfolio_allocation_notes(
+        self,
+        *,
+        fleet_target: float,
+        total_shed: float,
+        unmet: float,
+        protected_buildings: list[str],
+    ) -> list[str]:
+        notes = [
+            (
+                f"Allocated {total_shed} kW of {fleet_target} kW fleet demand-response target "
+                "by shedding lower-business-risk buildings first."
+            )
+        ]
+        if protected_buildings:
+            notes.append(
+                "Protected safety-critical buildings (shed last, non-critical loads only): "
+                + ", ".join(protected_buildings)
+            )
+        if unmet > 0:
+            notes.append(
+                f"{unmet} kW of the target remains unmet without touching critical-zone HVAC; "
+                "escalate to the utility before relaxing safety constraints."
+            )
+        return notes
+
+    def _check_safety_invariants(
+        self,
+        *,
+        building: BuildingProfile,
+        primary: EnergyPriority,
+        setpoint: float,
+        load_shed: list[LoadShedDecision],
+        source_ids: list[str],
+    ) -> list[SafetyViolation]:
+        violations: list[SafetyViolation] = []
+        critical_zones = set(building.critical_zones)
+        loads_by_id = {load.load_id: load for load in building.flexible_loads}
+        for decision in load_shed:
+            load = loads_by_id.get(decision.load_id)
+            if load is None:
+                violations.append(
+                    SafetyViolation(
+                        code="unknown_shed_load",
+                        detail=f"Shed load {decision.load_id} is not in the building profile.",
+                        source_ids=[building.building_id],
+                    )
+                )
+                continue
+            shared_critical = critical_zones.intersection(load.zones)
+            if shared_critical:
+                violations.append(
+                    SafetyViolation(
+                        code="critical_zone_load_shed",
+                        detail=(
+                            f"Load {decision.load_id} serves critical zone(s) "
+                            f"{sorted(shared_critical)} and must never be shed."
+                        ),
+                        source_ids=[building.building_id],
+                    )
+                )
+            if decision.shed_kw > load.max_shed_kw + 1e-6:
+                violations.append(
+                    SafetyViolation(
+                        code="shed_exceeds_capacity",
+                        detail=(
+                            f"Load {decision.load_id} shed {decision.shed_kw} kW exceeds its "
+                            f"{load.max_shed_kw} kW capacity."
+                        ),
+                        source_ids=[building.building_id],
+                    )
+                )
+        if not building.min_safe_setpoint_c <= setpoint <= building.max_safe_setpoint_c:
+            violations.append(
+                SafetyViolation(
+                    code="setpoint_out_of_bounds",
+                    detail=(
+                        f"Setpoint {setpoint}C is outside the safe band "
+                        f"[{building.min_safe_setpoint_c}, {building.max_safe_setpoint_c}]."
+                    ),
+                    source_ids=[building.building_id],
+                )
+            )
+        if primary == EnergyPriority.safety and setpoint != building.normal_setpoint_c:
+            violations.append(
+                SafetyViolation(
+                    code="critical_comfort_relaxed",
+                    detail=(
+                        "Safety priority requires the normal critical-zone setpoint "
+                        f"{building.normal_setpoint_c}C, but got {setpoint}C."
+                    ),
+                    source_ids=source_ids,
+                )
+            )
+        return violations
+
+    def _build_trace(
+        self,
+        *,
+        building: BuildingProfile,
+        weather: WeatherEvent,
+        pricing: UtilityPricingEvent,
+        occupancy: OccupancyProfile,
+        extreme_weather: bool,
+        peak_pricing: bool,
+        vulnerable_or_critical: bool,
+        conflicts: list[str],
+        primary: EnergyPriority,
+        decision: str,
+        setpoint: float,
+        load_shed: list[LoadShedDecision],
+        eligible_loads: list[FlexibleLoad],
+        shed_kw: float,
+        cost_avoidance: float,
+        co2_avoided: float,
+        business_risk: float,
+        violations: list[SafetyViolation],
+        source_ids: list[str],
+    ) -> list[TraceStep]:
+        shed_ids = [decision.load_id for decision in load_shed]
+        eligible_ids = [load.load_id for load in eligible_loads]
+        critical_zones = sorted(building.critical_zones)
+        return [
+            TraceStep(
+                step="retrieve_context",
+                decision="Loaded building, weather, pricing, and occupancy records.",
+                reason="Grounded multi-source context is required before any energy action.",
+                source_ids=source_ids,
+            ),
+            TraceStep(
+                step="detect_conflict",
+                decision="conflict" if conflicts else "no_conflict",
+                reason=(
+                    f"extreme_weather={extreme_weather}, peak_pricing={peak_pricing}, "
+                    f"vulnerable_or_critical={vulnerable_or_critical}."
+                ),
+                source_ids=[weather.event_id, pricing.pricing_event_id, occupancy.occupancy_id],
+            ),
+            TraceStep(
+                step="evaluate_priority",
+                decision=primary.value,
+                reason=decision,
+                source_ids=source_ids,
+            ),
+            TraceStep(
+                step="allocate_load_shed",
+                decision=(
+                    f"Shed {shed_kw} kW from {shed_ids}." if shed_ids else "No load shed required."
+                ),
+                reason=(
+                    f"Eligible non-critical loads {eligible_ids}; critical zones "
+                    f"{critical_zones} excluded from shedding."
+                    if critical_zones
+                    else f"Eligible loads {eligible_ids}; building has no critical zones."
+                ),
+                source_ids=[building.building_id, pricing.pricing_event_id],
+            ),
+            TraceStep(
+                step="governance_safety_check",
+                decision="passed" if not violations else "violations_found",
+                reason=(
+                    f"Setpoint {setpoint}C within "
+                    f"[{building.min_safe_setpoint_c}, {building.max_safe_setpoint_c}]; "
+                    "no critical-zone load shed."
+                    if not violations
+                    else f"Invariant issues: {[violation.code for violation in violations]}."
+                ),
+                source_ids=[building.building_id],
+            ),
+            TraceStep(
+                step="compute_impact",
+                decision=(
+                    f"cost_avoidance=${cost_avoidance}, co2_avoided={co2_avoided}kg, "
+                    f"business_risk_avoided=${business_risk}"
+                ),
+                reason=(
+                    "Financial and carbon impact computed deterministically from tariff, "
+                    "grid emissions, and building value fields."
+                ),
+                source_ids=source_ids,
+            ),
         ]
 
     def _load_by_id(self, items: list, field: str, value: str):
@@ -247,7 +637,15 @@ class EnergyOptimizationService:
         if wants_peak:
             return max(
                 candidates,
-                key=lambda item: (item.demand_response_requested_kw, item.price_multiplier),
+                key=lambda item: (
+                    len(
+                        scenario_tokens.intersection(
+                            _tokens(f"{item.pricing_event_id} {item.provider} {item.source}")
+                        )
+                    ),
+                    item.demand_response_requested_kw,
+                    item.price_multiplier,
+                ),
             )
         return min(
             candidates,
@@ -367,6 +765,14 @@ class EnergyOptimizationService:
         pricing: UtilityPricingEvent,
     ) -> float:
         return round(shed_kw * pricing.demand_charge_usd_per_kw * pricing.price_multiplier, 2)
+
+    def _estimated_co2_avoided(
+        self,
+        shed_kw: float,
+        pricing: UtilityPricingEvent,
+    ) -> float:
+        kwh_avoided = shed_kw * pricing.duration_hours
+        return round(kwh_avoided * pricing.marginal_emissions_kg_per_kwh, 2)
 
     def _business_risk_avoided(
         self,

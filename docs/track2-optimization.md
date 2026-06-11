@@ -32,20 +32,61 @@ Run:
 python -m startup_ops_agent.cli simulate-energy
 ```
 
-Current cases:
+Current cases (9, multivariable):
 
-- normal day, standard price
-- normal day, peak-demand price
-- heat dome, peak-demand price, critical occupancy
+- normal day, standard price (resilience)
+- normal day, peak-demand price (cost)
+- heat dome, peak-demand price, critical occupancy (safety, conflict)
+- heat dome, peak-demand price, non-critical occupancy (comfort, conflict)
+- cold snap, peak-demand price, critical occupancy (safety, conflict)
+- high-heat near-miss (HeatRisk 3), peak price, critical occupancy (safety)
+- storm, standard price, low occupancy (resilience)
+- grid emergency, coworking tower, day occupancy (cost)
+- heat dome, logistics DC, shift occupancy (comfort, conflict)
+
+Each case asserts the expected priority, conflict flag, **and** the expected
+safe setpoint, and requires the plan to pass all safety invariants.
 
 ## Agent Observability
 
-Each simulation emits trace steps:
+Every plan — not only simulations — now carries a six-step reasoning trace, so a
+judge can see exactly how the agent moved from context to a safe decision:
 
-- `retrieve_context`
-- `resolve_conflict`
+- `retrieve_context` — grounded building/weather/pricing/occupancy source IDs
+- `detect_conflict` — extreme-weather / peak-pricing / vulnerability flags
+- `evaluate_priority` — chosen priority (safety/comfort/cost/resilience) and why
+- `allocate_load_shed` — selected non-critical loads; critical zones excluded
+- `governance_safety_check` — setpoint bounds + no-critical-shed invariant result
+- `compute_impact` — cost avoidance, CO2 avoided, business risk avoided
 
-The trace records the selected priority, reason, and source IDs used.
+The portfolio planner emits its own fleet-level trace
+(`retrieve_fleet_context` → `rank_and_allocate` → `protect_critical_buildings`).
+
+## Safety Invariants
+
+The service proves — on every plan — that it never does the unsafe thing, and
+surfaces the proof as `safety_invariants_passed` / `safety_violations`:
+
+- a critical-zone load is **never** placed in the shed set (fail-closed: a breach
+  raises `SafetyInvariantError` rather than returning an unsafe plan)
+- the setpoint always stays within `[min_safe, max_safe]`
+- no load is shed beyond its rated capacity
+- under `safety` priority the critical-zone setpoint stays at the normal value
+
+Malformed building/weather/pricing data is rejected at load time via pydantic
+cross-field validators (e.g. `min <= normal <= max`, critical zones must be
+declared HVAC zones, event windows cannot end before they start).
+
+## Quantitative Metrics
+
+`python -m startup_ops_agent.cli evaluate` now emits a `metrics` block for
+baseline comparison:
+
+- `simulation_pass_rate` (target 1.0)
+- `safety_violations_total` (target 0)
+- `priority_distribution` across the case suite
+- `avg_decision_latency_ms`
+- `source_id_preservation_rate` (target 1.0)
 
 ## Agent Optimizer
 

@@ -7,6 +7,7 @@
     "price_multiplier": 1.1,
     "demand_response_requested_kw": 0,
     "demand_charge_usd_per_kw": 18,
+    "marginal_emissions_kg_per_kwh": 0.38,
     "source": "synthetic-utility-standard"
   },
   {
@@ -17,6 +18,18 @@
     "price_multiplier": 3.8,
     "demand_response_requested_kw": 48,
     "demand_charge_usd_per_kw": 42,
+    "marginal_emissions_kg_per_kwh": 0.62,
     "source": "synthetic-utility-surge"
+  },
+  {
+    "pricing_event_id": "pricing-grid-emergency",
+    "provider": "GridCo",
+    "starts_at": "2026-06-08T15:00:00Z",
+    "ends_at": "2026-06-08T19:00:00Z",
+    "price_multiplier": 4.5,
+    "demand_response_requested_kw": 120,
+    "demand_charge_usd_per_kw": 55,
+    "marginal_emissions_kg_per_kwh": 0.71,
+    "source": "synthetic-utility-grid-emergency"
   }
 ]

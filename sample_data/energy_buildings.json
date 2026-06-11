@@ -32,5 +32,73 @@
     "business_value_at_risk_usd_per_hour": 18000,
     "business_risk_protection_factor": 0.5,
     "critical_zone_policy": "Cleanroom and server-room HVAC cannot be relaxed during HeatRisk level 3+ events while occupied."
+  },
+  {
+    "building_id": "bldg-logistics-dc",
+    "name": "Northgate Logistics DC",
+    "tenant_id": "tenant-northgate",
+    "business_type": "B2B distribution and fulfillment",
+    "hvac_zones": ["dock", "pick-pack", "cold-storage", "office-mezz"],
+    "critical_zones": ["cold-storage"],
+    "flexible_loads": [
+      {
+        "load_id": "dock-ventilation",
+        "description": "Loading-dock makeup-air ventilation fans",
+        "zones": ["dock"],
+        "max_shed_kw": 30
+      },
+      {
+        "load_id": "yard-lighting",
+        "description": "Daytime-dimmable yard and perimeter lighting",
+        "zones": ["yard"],
+        "max_shed_kw": 15
+      },
+      {
+        "load_id": "fleet-ev-depot",
+        "description": "Managed electric delivery-van charging depot",
+        "zones": ["yard"],
+        "max_shed_kw": 25
+      }
+    ],
+    "normal_setpoint_c": 24.0,
+    "max_safe_setpoint_c": 27.0,
+    "min_safe_setpoint_c": 18.0,
+    "business_value_at_risk_usd_per_hour": 4000,
+    "business_risk_protection_factor": 0.4,
+    "critical_zone_policy": "Cold-storage refrigeration cannot be curtailed; only non-refrigerated loads are demand-response eligible."
+  },
+  {
+    "building_id": "bldg-coworking-tower",
+    "name": "Harbor Coworking Tower",
+    "tenant_id": "tenant-harbor",
+    "business_type": "B2B flexible workspace operator",
+    "hvac_zones": ["floor-3", "floor-4", "floor-5", "lobby"],
+    "critical_zones": [],
+    "flexible_loads": [
+      {
+        "load_id": "lobby-precooling",
+        "description": "Lobby and common-area precooling",
+        "zones": ["lobby"],
+        "max_shed_kw": 12
+      },
+      {
+        "load_id": "amenity-water-heater",
+        "description": "Shower and amenity water heating",
+        "zones": ["amenity"],
+        "max_shed_kw": 10
+      },
+      {
+        "load_id": "garage-ev-chargers",
+        "description": "Member EV charging in the parking garage",
+        "zones": ["garage"],
+        "max_shed_kw": 8
+      }
+    ],
+    "normal_setpoint_c": 23.0,
+    "max_safe_setpoint_c": 26.0,
+    "min_safe_setpoint_c": 19.0,
+    "business_value_at_risk_usd_per_hour": 6000,
+    "business_risk_protection_factor": 0.3,
+    "critical_zone_policy": "No safety-critical zones; maintain leased-floor comfort within the safe setpoint band."
   }
 ]

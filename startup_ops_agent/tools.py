@@ -102,6 +102,22 @@ def build_energy_optimization_plan(
         return {"status": "error", "error_type": exc.__class__.__name__, "message": str(exc)}
 
 
+def build_energy_portfolio_plan(weather_event_id: str, pricing_event_id: str) -> dict:
+    """Meet a grid-wide demand-response target across the whole building portfolio.
+
+    Sheds flexible load from lower-business-risk buildings first and protects
+    safety-critical buildings. Reports fleet cost and CO2 avoidance.
+    """
+    try:
+        plan = _energy_service().build_portfolio_plan(
+            weather_event_id=weather_event_id,
+            pricing_event_id=pricing_event_id,
+        )
+        return {"status": "success", "portfolio_plan": plan.model_dump(mode="json")}
+    except (DataAccessError, NotFoundError, ValueError) as exc:
+        return {"status": "error", "error_type": exc.__class__.__name__, "message": str(exc)}
+
+
 def build_energy_plan_from_scenario(scenario: str) -> dict:
     """Resolve a natural-language B2B energy scenario and build a source-backed plan."""
     try:

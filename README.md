@@ -12,8 +12,19 @@ The optimized system uses:
 - ADK root agent plus specialist sub-agents
 - MCP tools for grounded building, weather, pricing, and occupancy context
 - deterministic conflict-resolution service for safety-critical decisions
-- synthetic Agent Simulation cases for rare multi-variable events
-- observability trace steps for conflict decisions
+- portfolio demand-response optimizer that meets a grid-wide load-shed target
+  across multiple buildings while protecting safety-critical sites
+- carbon accounting: every plan reports estimated CO2 avoided from grid
+  marginal emissions alongside dollar cost avoidance
+- 9 synthetic Agent Simulation cases spanning heat dome, cold snap, storm,
+  near-miss, and grid-emergency events (safety/comfort/cost/resilience outcomes)
+- a six-step observability trace on every plan (context → conflict → priority →
+  load-shed → safety check → impact), plus a fleet-level portfolio trace
+- runtime safety invariants surfaced as proof on every plan (critical-zone loads
+  never shed, setpoints within safe bounds) with fail-closed enforcement
+- fail-fast model validation that rejects malformed building/weather/pricing data
+- a quantitative evaluation metrics report (pass rate, safety violations,
+  priority distribution, decision latency, source-ID preservation)
 - instruction optimizer checks for stalled comfort-versus-cost logic
 - building-specific controllable-load capacity and B2B financial impact fields
 - A2A runtime wrapper for enterprise agent interoperability
@@ -82,6 +93,21 @@ python -m startup_ops_agent.cli energy-plan `
   --occupancy occupancy-business-critical
 ```
 
+## Run Portfolio Optimization
+
+Meet a grid-wide demand-response target across the whole building portfolio.
+Flexible load is shed from lower-business-risk buildings first, and
+safety-critical buildings are protected (shed last, non-critical loads only):
+
+```powershell
+python -m startup_ops_agent.cli energy-portfolio `
+  --weather weather-heat-dome `
+  --pricing pricing-grid-emergency
+```
+
+The plan reports the fleet load-shed allocation per building, the dollar cost
+avoided, and the estimated CO2 avoided, and names the protected critical sites.
+
 ## Run Agent Simulation
 
 ```powershell
@@ -95,7 +121,9 @@ python -m startup_ops_agent.cli evaluate --output reports/evaluation.json
 ```
 
 The readiness evaluation is Track 2-focused: instruction contract, multi-agent
-structure, rare-event simulation, and B2B business-impact evidence.
+structure, rare-event simulation, B2B business-impact evidence, and portfolio
+demand-response that protects critical buildings while reporting cost and CO2
+avoidance.
 
 ## Run With ADK
 

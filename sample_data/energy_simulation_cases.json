@@ -6,7 +6,8 @@
     "pricing_event_id": "pricing-standard",
     "occupancy_id": "occupancy-low",
     "expected_primary_priority": "resilience",
-    "expected_conflict": false
+    "expected_conflict": false,
+    "expected_setpoint_c": 23.0
   },
   {
     "case_id": "normal-day-peak-price",
@@ -15,7 +16,8 @@
     "pricing_event_id": "pricing-peak-surge",
     "occupancy_id": "occupancy-low",
     "expected_primary_priority": "cost",
-    "expected_conflict": false
+    "expected_conflict": false,
+    "expected_setpoint_c": 25.0
   },
   {
     "case_id": "heat-dome-peak-price-critical-occupancy",
@@ -24,6 +26,67 @@
     "pricing_event_id": "pricing-peak-surge",
     "occupancy_id": "occupancy-business-critical",
     "expected_primary_priority": "safety",
-    "expected_conflict": true
+    "expected_conflict": true,
+    "expected_setpoint_c": 23.0
+  },
+  {
+    "case_id": "heat-dome-peak-price-noncritical-occupancy",
+    "building_id": "bldg-medtech-hq",
+    "weather_event_id": "weather-heat-dome",
+    "pricing_event_id": "pricing-peak-surge",
+    "occupancy_id": "occupancy-low",
+    "expected_primary_priority": "comfort",
+    "expected_conflict": true,
+    "expected_setpoint_c": 24.0
+  },
+  {
+    "case_id": "cold-snap-peak-price-critical-occupancy",
+    "building_id": "bldg-medtech-hq",
+    "weather_event_id": "weather-cold-snap",
+    "pricing_event_id": "pricing-peak-surge",
+    "occupancy_id": "occupancy-business-critical",
+    "expected_primary_priority": "safety",
+    "expected_conflict": true,
+    "expected_setpoint_c": 23.0
+  },
+  {
+    "case_id": "heat-high-near-miss-critical-occupancy",
+    "building_id": "bldg-medtech-hq",
+    "weather_event_id": "weather-heat-high",
+    "pricing_event_id": "pricing-peak-surge",
+    "occupancy_id": "occupancy-business-critical",
+    "expected_primary_priority": "safety",
+    "expected_conflict": true,
+    "expected_setpoint_c": 23.0
+  },
+  {
+    "case_id": "storm-standard-price-low-occupancy",
+    "building_id": "bldg-medtech-hq",
+    "weather_event_id": "weather-storm",
+    "pricing_event_id": "pricing-standard",
+    "occupancy_id": "occupancy-low",
+    "expected_primary_priority": "resilience",
+    "expected_conflict": false,
+    "expected_setpoint_c": 23.0
+  },
+  {
+    "case_id": "grid-emergency-coworking-cost",
+    "building_id": "bldg-coworking-tower",
+    "weather_event_id": "weather-normal",
+    "pricing_event_id": "pricing-grid-emergency",
+    "occupancy_id": "occupancy-coworking-day",
+    "expected_primary_priority": "cost",
+    "expected_conflict": false,
+    "expected_setpoint_c": 25.0
+  },
+  {
+    "case_id": "heat-dome-peak-logistics-comfort",
+    "building_id": "bldg-logistics-dc",
+    "weather_event_id": "weather-heat-dome",
+    "pricing_event_id": "pricing-peak-surge",
+    "occupancy_id": "occupancy-logistics-shift",
+    "expected_primary_priority": "comfort",
+    "expected_conflict": true,
+    "expected_setpoint_c": 25.0
   }
 ]

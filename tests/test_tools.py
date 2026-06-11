@@ -97,4 +97,11 @@ def test_energy_simulation_tool_returns_trace(tmp_path: Path, monkeypatch) -> No
 
     assert result["status"] == "success"
     assert result["result"]["passed"] is True
-    assert result["result"]["trace"][1]["step"] == "resolve_conflict"
+    assert [step["step"] for step in result["result"]["trace"]] == [
+        "retrieve_context",
+        "detect_conflict",
+        "evaluate_priority",
+        "allocate_load_shed",
+        "governance_safety_check",
+        "compute_impact",
+    ]

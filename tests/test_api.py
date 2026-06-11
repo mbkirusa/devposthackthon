@@ -72,6 +72,32 @@ def test_energy_plan_endpoint_returns_b2b_conflict_plan(
         "cafeteria-cooling",
         "conference-preconditioning",
     }
+    assert payload["safety_invariants_passed"] is True
+    assert payload["safety_violations"] == []
+    assert [step["step"] for step in payload["trace"]][0] == "retrieve_context"
+
+
+def test_energy_portfolio_endpoint_protects_critical_building(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    _isolated_data_dir(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/energy-portfolio",
+        json={
+            "weather_event_id": "weather-heat-dome",
+            "pricing_event_id": "pricing-grid-emergency",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["target_met"] is True
+    assert payload["protected_buildings"] == ["bldg-medtech-hq"]
+    assert payload["total_co2_avoided_kg"] > 0
+    assert payload["total_cost_avoidance_usd"] > 0
 
 
 def test_evaluations_endpoint_reports_passing_quality_gate(

@@ -27,6 +27,10 @@ The energy service owns business rules:
 - peak pricing detection
 - critical-zone safety priority
 - flexible-load shedding
+- portfolio demand-response allocation across multiple buildings, shedding
+  lower-business-risk sites first and protecting safety-critical buildings
+- cost and CO2 avoidance accounting from utility tariffs and grid marginal
+  emissions
 - source preservation
 - observability trace generation
 

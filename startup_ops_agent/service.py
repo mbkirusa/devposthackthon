@@ -24,6 +24,10 @@ class NotFoundError(RuntimeError):
     pass
 
 
+class SafetyInvariantError(RuntimeError):
+    """Raised when a plan would violate a hard safety invariant (fail-closed)."""
+
+
 def _days_until(value: date, today: date) -> int:
     return (value - today).days
 

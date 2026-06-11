@@ -68,6 +68,15 @@ def energy_scenario(scenario: str, data_dir: Path) -> dict:
     }
 
 
+def energy_portfolio(weather_event_id: str, pricing_event_id: str, data_dir: Path) -> dict:
+    service = EnergyOptimizationService(EnergyJsonRepository(data_dir))
+    plan = service.build_portfolio_plan(
+        weather_event_id=weather_event_id,
+        pricing_event_id=pricing_event_id,
+    )
+    return plan.model_dump(mode="json")
+
+
 def energy_simulations(data_dir: Path) -> dict:
     service = EnergyOptimizationService(EnergyJsonRepository(data_dir))
     results = service.run_all_simulations()
@@ -100,6 +109,11 @@ def main() -> None:
     scenario = subparsers.add_parser("energy-scenario")
     scenario.add_argument("--scenario", required=True)
     scenario.add_argument("--data-dir", type=Path, default=default_data_dir())
+
+    portfolio = subparsers.add_parser("energy-portfolio")
+    portfolio.add_argument("--weather", required=True)
+    portfolio.add_argument("--pricing", required=True)
+    portfolio.add_argument("--data-dir", type=Path, default=default_data_dir())
 
     simulate = subparsers.add_parser("simulate-energy")
     simulate.add_argument("--data-dir", type=Path, default=default_data_dir())
@@ -139,6 +153,13 @@ def main() -> None:
     elif args.command == "energy-scenario":
         result = energy_scenario(
             scenario=args.scenario,
+            data_dir=args.data_dir.resolve(),
+        )
+        print(json.dumps(result, indent=2))
+    elif args.command == "energy-portfolio":
+        result = energy_portfolio(
+            weather_event_id=args.weather,
+            pricing_event_id=args.pricing,
             data_dir=args.data_dir.resolve(),
         )
         print(json.dumps(result, indent=2))

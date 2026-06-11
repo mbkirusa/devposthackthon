@@ -12,6 +12,19 @@
     "occupied_zones": ["office-east"],
     "vulnerable_occupants": false,
     "business_hours": false
+  },
+  {
+    "occupancy_id": "occupancy-logistics-shift",
+    "building_id": "bldg-logistics-dc",
+    "occupied_zones": ["dock", "pick-pack", "office-mezz"],
+    "vulnerable_occupants": false,
+    "business_hours": true
+  },
+  {
+    "occupancy_id": "occupancy-coworking-day",
+    "building_id": "bldg-coworking-tower",
+    "occupied_zones": ["floor-3", "floor-4", "floor-5"],
+    "vulnerable_occupants": false,
+    "business_hours": true
   }
 ]
-
