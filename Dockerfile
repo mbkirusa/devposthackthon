@@ -8,6 +8,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY startup_ops_agent ./startup_ops_agent
 COPY sample_data ./sample_data
+COPY deploy ./deploy
 
 RUN pip install --no-cache-dir .
 

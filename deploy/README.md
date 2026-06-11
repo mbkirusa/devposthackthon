@@ -25,6 +25,30 @@ Open `http://localhost:8080/docs` for browser-based testing.
 - maximum one instance for bounded challenge-demo spend
 - model and actor environment variables
 
+## Public ADK UI
+
+The public ADK web UI runs as a separate Cloud Run service so the local-style
+agent console remains available without replacing the testing API:
+
+```powershell
+gcloud run deploy energy-ops-adk-ui `
+  --source . `
+  --region us-central1 `
+  --allow-unauthenticated `
+  --min-instances 0 `
+  --max-instances 1 `
+  --memory 1Gi `
+  --cpu 1 `
+  --command python `
+  --args deploy/run_adk_web.py
+```
+
+`deploy/run_adk_web.py` starts:
+
+```powershell
+adk web startup_ops_agent --host 0.0.0.0 --port $env:PORT --no-reload
+```
+
 Before deploying, replace:
 
 - `PROJECT_ID`
