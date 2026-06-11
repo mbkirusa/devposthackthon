@@ -7,11 +7,13 @@ docker build -t energy-ops-agent:0.1.0 .
 docker run --rm -p 8080:8080 energy-ops-agent:0.1.0
 ```
 
-The container serves the A2A runtime. Check the well-known agent card:
+The container serves the FastAPI testing API. Check health and interactive docs:
 
 ```powershell
-Invoke-WebRequest http://localhost:8080/.well-known/agent-card.json -UseBasicParsing
+Invoke-WebRequest http://localhost:8080/v1/health -UseBasicParsing
 ```
+
+Open `http://localhost:8080/docs` for browser-based testing.
 
 ## Cloud Run Shape
 
@@ -19,15 +21,14 @@ Invoke-WebRequest http://localhost:8080/.well-known/agent-card.json -UseBasicPar
 
 - Cloud Run service
 - port `8080`
-- startup and liveness probes against the A2A agent card
-- dedicated service account placeholder
+- startup and liveness probes against `/v1/health`
+- maximum one instance for bounded challenge-demo spend
 - model and actor environment variables
 
 Before deploying, replace:
 
 - `PROJECT_ID`
 - Artifact Registry image path
-- service account name
 - secret bindings
 
 ## Recommended Google Cloud Services

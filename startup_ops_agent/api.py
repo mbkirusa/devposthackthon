@@ -77,6 +77,11 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/v1/health")
+def public_health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @app.get("/v1/enterprise-manifest", response_model=EnterpriseManifest)
 def enterprise_manifest() -> dict[str, object]:
     return {
@@ -84,7 +89,7 @@ def enterprise_manifest() -> dict[str, object]:
         "display_name": "Energy Ops Agent",
         "track": "Optimize (Existing Agents)",
         "deployment_target": "Google Cloud Run",
-        "health_endpoint": "/healthz",
+        "health_endpoint": "/v1/health",
         "primary_endpoint": "/v1/energy-plan",
         "readiness_endpoint": "/v1/evaluations",
         "a2a_agent_card": "/.well-known/agent-card.json",

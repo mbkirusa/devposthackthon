@@ -25,6 +25,15 @@ def test_healthz() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_public_health_endpoint() -> None:
+    client = TestClient(app)
+
+    response = client.get("/v1/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_account_brief_endpoint_returns_source_backed_risks(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -99,6 +108,7 @@ def test_enterprise_manifest_endpoint_is_track2_focused() -> None:
     assert payload["display_name"] == "Energy Ops Agent"
     assert payload["track"] == "Optimize (Existing Agents)"
     assert payload["deployment_target"] == "Google Cloud Run"
+    assert payload["health_endpoint"] == "/v1/health"
     assert payload["primary_endpoint"] == "/v1/energy-plan"
     assert payload["a2a_agent_card"] == "/.well-known/agent-card.json"
     assert "deterministic safety-first conflict resolution" in payload["controls"]

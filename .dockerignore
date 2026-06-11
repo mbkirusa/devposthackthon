@@ -1,0 +1,15 @@
+.adk/
+.codex/
+.firecrawl/
+.git/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+**/.env
+reports/
+sample_data/audit_log.jsonl

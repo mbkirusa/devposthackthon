@@ -1,51 +1,81 @@
-# Energy Ops Agent
+# Energy Operations Reliability Platform
 
-Track: **Optimize (Existing Agents)**
+Energy Operations Reliability Platform helps facilities and energy teams make
+safe, auditable building-control decisions during rare grid and weather events.
+It is designed for B2B operators responsible for occupant safety, critical-zone
+continuity, and demand-response cost control.
 
-Energy Ops Agent is an optimized ADK multi-agent system for B2B building energy
-operations. The existing agent system has been refactored and stress-tested for
-rare real-world conflicts: an extreme weather event happening at the same time a
-utility provider issues peak-demand surge pricing.
+The reference scenario is a medical-technology headquarters facing an extreme
+heat event at the same time as a utility peak-demand pricing surge. The system
+resolves the conflict by protecting critical occupants first, preserving
+critical-zone comfort, and shedding named non-critical loads before touching
+HVAC constraints.
 
-The optimized system uses:
+## Business Use Case
 
-- ADK root agent plus specialist sub-agents
-- MCP tools for grounded building, weather, pricing, and occupancy context
-- deterministic conflict-resolution service for safety-critical decisions
-- synthetic Agent Simulation cases for rare multi-variable events
-- observability trace steps for conflict decisions
-- instruction optimizer checks for stalled comfort-versus-cost logic
-- building-specific controllable-load capacity and B2B financial impact fields
-- A2A runtime wrapper for enterprise agent interoperability
+B2B facilities teams often need to reduce demand charges, but a cost-only
+response can create unacceptable operational risk. This project gives operators
+a repeatable way to answer:
 
-## Existing Agents
+- Which building controls can be adjusted safely?
+- Which loads should be shed first?
+- What financial impact is expected?
+- Which policy, weather, pricing, and occupancy records support the decision?
+- How did the system resolve the comfort-versus-cost conflict?
 
-The current agents live in `startup_ops_agent/agent.py`:
+## Operating Outcome
 
-- `energy_ops_agent`: root orchestrator
-- `weather_pricing_grounding_agent`: retrieves grounded weather, pricing,
-  occupancy, and building context
-- `comfort_cost_conflict_agent`: reasons over comfort, safety, and energy cost
-  conflicts
-- `energy_action_governance_agent`: recommends safe HVAC and flexible-load
-  actions without violating critical-zone constraints
+For the heat-dome plus peak-pricing scenario, the system returns:
 
-## Track 2 Scenario
+- primary priority: `safety`
+- critical-zone setpoint: `23.0 C`
+- expected non-critical load shed: `21.6 kW`
+- selected loads: `cafeteria-cooling`, `conference-preconditioning`
+- estimated demand-response cost avoidance: `$3,447.36`
+- estimated protected business risk: `$9,000.00`
+- conflict detected: `extreme_weather_peak_pricing`
+- trace steps: `retrieve_context`, `resolve_conflict`
 
-The hard case is:
+## Core Capabilities
 
-```text
-Extreme heat dome + peak-demand utility surge + critical building occupancy
-```
+- Source-backed scenario resolution from business language to internal records.
+- Safety-first conflict resolution for extreme weather and peak pricing.
+- Load-level demand-response planning using building-specific capacity data.
+- Critical-zone policy enforcement before HVAC setpoint relaxation.
+- Simulation coverage for normal-day and rare-event operating cases.
+- Readiness evaluation for instruction coverage, orchestration, simulation, and
+  B2B business-impact evidence.
+- Cloud Run and A2A-ready runtime packaging for enterprise integration.
 
-The optimized behavior is:
+## System Components
 
-1. Detect the conflict between occupant safety and energy cost.
-2. Prioritize safety and critical-zone comfort.
-3. Shed flexible loads before changing critical-zone HVAC.
-4. Return the named non-critical loads selected for demand response.
-5. Preserve source IDs from weather, pricing, building, and occupancy records.
-6. Emit a trace showing context retrieval and conflict resolution.
+The production logic is intentionally split by responsibility:
+
+- `EnergyOptimizationService`: deterministic business rules and calculations.
+- `EnergyJsonRepository`: local source-backed building, weather, pricing, and
+  occupancy records.
+- `energy_scenario_plan`: resolves natural-language scenarios into known
+  records and returns a complete energy plan.
+- `energy_optimization_plan`: builds a plan when exact record IDs are provided.
+- `energy_simulation`: runs synthetic rare-event simulations and returns trace
+  steps.
+
+The current ADK runtime lives in `startup_ops_agent/agent.py` and coordinates:
+
+- `energy_ops_agent`
+- `weather_pricing_grounding_agent`
+- `comfort_cost_conflict_agent`
+- `energy_action_governance_agent`
+
+## Architecture
+
+Submission-ready diagram assets are available in:
+
+- `docs/architecture-diagram.png`
+- `docs/architecture-diagram.svg`
+- `docs/architecture-diagram.dot`
+
+See `docs/architecture.md` for the full architecture notes.
 
 ## Setup
 
@@ -55,24 +85,19 @@ python -m venv .venv
 python -m pip install -e ".[dev]"
 ```
 
-Set your Gemini key in `startup_ops_agent/.env`:
+Create `startup_ops_agent/.env` from `startup_ops_agent/.env.example` and add
+your local Google credentials. Do not commit real keys.
 
-```text
-GOOGLE_API_KEY="your-key"
-```
+## Run A Business Scenario
 
-Do not commit real keys.
-
-## Run The Optimized Energy Plan
-
-Natural-language scenario resolver:
+Natural-language scenario:
 
 ```powershell
 python -m startup_ops_agent.cli energy-scenario `
   --scenario "Optimize MedTech HQ during the heat dome and peak-demand surge. Prioritize critical occupants and show the observability trace."
 ```
 
-Exact IDs:
+Exact record IDs:
 
 ```powershell
 python -m startup_ops_agent.cli energy-plan `
@@ -82,35 +107,36 @@ python -m startup_ops_agent.cli energy-plan `
   --occupancy occupancy-business-critical
 ```
 
-## Run Agent Simulation
+## Run Reliability Checks
 
 ```powershell
 python -m startup_ops_agent.cli simulate-energy
-```
-
-## Run Readiness Evaluation
-
-```powershell
 python -m startup_ops_agent.cli evaluate --output reports/evaluation.json
 ```
 
-The readiness evaluation is Track 2-focused: instruction contract, multi-agent
-structure, rare-event simulation, and B2B business-impact evidence.
+Expected readiness result:
 
-## Run With ADK
+```json
+{
+  "total": 4,
+  "passed": 4,
+  "failed": 0
+}
+```
+
+## Run Local Web Demo
 
 ```powershell
 adk web startup_ops_agent --port 8000 --no-reload
 ```
 
-Try:
+Open `http://127.0.0.1:8000` and test:
 
 ```text
-Optimize MedTech HQ during the heat dome and peak-demand surge. Prioritize
-critical occupants and explain the observability trace.
+Optimize MedTech HQ during the heat dome and peak-demand surge. Prioritize critical occupants and show the observability trace.
 ```
 
-## A2A Runtime
+## Run A2A Runtime
 
 ```powershell
 uvicorn startup_ops_agent.a2a_app:a2a_app --host 127.0.0.1 --port 8081
@@ -130,9 +156,10 @@ pytest
 ruff check .
 ```
 
-## Submission Assets
+## Submission References
 
-- [Architecture](docs/architecture.md)
-- [Track 2 optimization plan](docs/track2-optimization.md)
-- [Evaluation plan](docs/evaluation-plan.md)
-- [Demo script](docs/demo-script.md)
+- `docs/submission.md`
+- `docs/architecture.md`
+- `docs/track2-optimization.md`
+- `docs/evaluation-plan.md`
+- `docs/demo-script.md`

@@ -1,33 +1,32 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: startup-ops-agent
+  name: energy-ops-agent
   annotations:
     run.googleapis.com/ingress: all
 spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/maxScale: "10"
+        autoscaling.knative.dev/maxScale: "1"
         run.googleapis.com/execution-environment: gen2
     spec:
-      serviceAccountName: startup-ops-agent-runtime
       containers:
-        - image: us-docker.pkg.dev/PROJECT_ID/startup-ops-agent/app:0.1.0
+        - image: us-docker.pkg.dev/PROJECT_ID/energy-ops-agent/app:0.1.0
           ports:
             - containerPort: 8080
           env:
             - name: STARTUP_OPS_MODEL
-              value: gemini-flash-latest
+              value: gemini-2.5-flash
             - name: STARTUP_OPS_ACTOR_ID
               value: founder-001
             - name: STARTUP_OPS_ACTOR_ROLE
               value: founder
           startupProbe:
             httpGet:
-              path: /.well-known/agent-card.json
+              path: /v1/health
               port: 8080
           livenessProbe:
             httpGet:
-              path: /.well-known/agent-card.json
+              path: /v1/health
               port: 8080
