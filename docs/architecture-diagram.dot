@@ -1,0 +1,116 @@
+digraph EnergyOpsArchitecture {
+  graph [
+    label="Energy Ops Agent - Track 2 Optimized Existing Agent Architecture",
+    labelloc=t,
+    fontsize=22,
+    fontname="Arial",
+    rankdir=LR,
+    bgcolor="white",
+    pad=0.35,
+    nodesep=0.55,
+    ranksep=0.85
+  ];
+
+  node [
+    shape=rect,
+    style="rounded,filled",
+    fontname="Arial",
+    fontsize=12,
+    color="#334155",
+    penwidth=1.2,
+    fillcolor="#f8fafc",
+    margin="0.12,0.08"
+  ];
+
+  edge [
+    color="#475569",
+    arrowsize=0.8,
+    fontname="Arial",
+    fontsize=10
+  ];
+
+  operator [
+    label="Facilities / Energy Operator\nADK Web or API",
+    fillcolor="#dbeafe"
+  ];
+
+  root [
+    label="building_energy_ops_agent\nADK root orchestration\nGemini on Agent Platform",
+    fillcolor="#e0f2fe"
+  ];
+
+  weather [
+    label="weather_grounding_agent\nWeather, grid risk,\nHeatRisk context",
+    fillcolor="#ecfeff"
+  ];
+
+  pricing [
+    label="utility_pricing_agent\nPeak pricing and\ndemand-response context",
+    fillcolor="#ecfeff"
+  ];
+
+  comfort [
+    label="comfort_safety_agent\nOccupant safety and\ncritical-zone policy",
+    fillcolor="#fef3c7"
+  ];
+
+  optimizer [
+    label="energy_optimization_agent\nHVAC and flexible-load\noptimization plan",
+    fillcolor="#dcfce7"
+  ];
+
+  mcp [
+    label="MCP Tool Server\nenergy_scenario_plan\nenergy_optimization_plan\nenergy_simulation",
+    fillcolor="#ede9fe"
+  ];
+
+  service [
+    label="EnergyOptimizationService\nDeterministic safety-first\nconflict resolution",
+    fillcolor="#f1f5f9"
+  ];
+
+  data [
+    label="Grounded Operating Data\nbuilding profile\nweather events\nutility pricing\noccupancy",
+    fillcolor="#f8fafc"
+  ];
+
+  simulation [
+    label="Agent Simulation / Evaluation\nrare-event synthetic cases\n3/3 simulations passing",
+    fillcolor="#fce7f3"
+  ];
+
+  observability [
+    label="Agent Observability Trace\nretrieve_context\nresolve_conflict\nsource IDs",
+    fillcolor="#ffedd5"
+  ];
+
+  output [
+    label="B2B Energy Plan\npriority=safety\n21.6 kW shed\n$3,447.36 cost avoidance\n$9,000 risk avoided",
+    fillcolor="#bbf7d0"
+  ];
+
+  cloud [
+    label="Google Cloud Runtime Path\nCloud Run / Agent Engine\nA2A agent card\nCloud Logging / Trace",
+    fillcolor="#dbeafe"
+  ];
+
+  operator -> root [label="natural-language request"];
+  root -> weather [label="delegate grounding"];
+  root -> pricing [label="delegate pricing"];
+  root -> comfort [label="delegate conflict"];
+  root -> optimizer [label="delegate governed actions"];
+
+  weather -> mcp;
+  pricing -> mcp;
+  comfort -> mcp;
+  optimizer -> mcp;
+  root -> mcp [label="tool calls"];
+
+  mcp -> service [label="validated tool input"];
+  service -> data [dir=both, label="source-backed records"];
+  service -> observability [label="trace steps"];
+  service -> output [label="plan"];
+  simulation -> service [label="stress tests"];
+  output -> operator [label="safe recommendation"];
+  root -> cloud [label="deployable runtime"];
+}

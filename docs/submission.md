@@ -57,6 +57,12 @@ recommendations.
 - Regression tests for the rare heat-dome plus peak-pricing case.
 - A2A runtime for enterprise interoperability.
 
+## Architecture Diagram
+
+Use `docs/architecture-diagram.png` as the uploadable architecture diagram for
+submission. The editable source is `docs/architecture-diagram.dot`, and the SVG
+version is `docs/architecture-diagram.svg`.
+
 ## Business Impact
 
 The agent helps B2B building operators avoid unsafe energy decisions while still
